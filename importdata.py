@@ -5,9 +5,9 @@ import re
 import mysql.connector
 from mysql.connector import Error
 
-regf = re.compile("^d[rwx-]{3} [0-9]+ [A-Za-z0-9]+ [A-Za-z0-9]+ [0-9]+ [0-9]+[-][0-9]+[-][0-9]+ [0-9]+[:][0-9]+ [^/]+$")
-regdir = re.compile("^d[rwx-]{3} [0-9]+ [A-Za-z0-9]+ [A-Za-z0-9]+ [0-9]+ [0-9]+[-][0-9]+[-][0-9]+ [0-9]+[:][0-9]+ [^/]+[/]$")
-regname = re.compile()
+# reg = re.compile("^[dbclnps-][rwx-]{9} [0-9]+ [A-Za-z0-9]+ [A-Za-z0-9]+ [0-9]+ [A-Za-z]{3} \s?[0-9]+ [0-9]+[:][0-9]+ .+$")
+reg = re.compile("^(?P<type>([dbclnps-]))(?P<ownerp>([rwx-]{3}))(?P<groupp>([rwx-]{3}))(?P<otherp>([rwx-]{3})) (?P<hlink>(\s*[0-9]+)) (?P<owner>([A-Za-z0-9]+)) (?P<group>([A-Za-z0-9]+)) (?P<size>(\s*[0-9]+)) (?P<date>([A-Za-z]{3} \s?[0-9]+)) (?P<time>([0-9]+[:][0-9]+)) (?P<name>(.+))$")
+
 
 # DirTree = dict()
 
@@ -24,29 +24,31 @@ regname = re.compile()
        
 def scanDir():
     for (root,dirs,files) in os.walk(os.getcwd(), topdown=True): 
-        result = subprocess.run(['ls', '-lp'], stdout=subprocess.PIPE).stdout.decode('utf-8')
-        
-        for line in result.split("\n"):
-            
-            if regf.match(line):           
-                ownerp,groupp,otherp,hlink,owner,group,date,time,name = getInfo(line)
-                path = root+'/'+name
-                insertInfo(ownerp,groupp,otherp,hlink,owner,group,date,time,name,path)
+        result = subprocess.run(['ls', '-l'], stdout=subprocess.PIPE).stdout.decode('utf-8')
+        print(result)
+        print(result.split("\n")[1:])
+        for line in result.split("\n")[1:]:
+            print(line)
+            type, ownerp, groupp, otherp, hlink, owner, group, date, time, name = getInfo(line)
+            path = root + '/' + name
+            insertInfo(type, ownerp, groupp, otherp, hlink, owner, group, date, time, name, path)
+            if type == "d":
                 insertBLOB(path)
-                
-            elif regdir.match(line):
-                ownerp,groupp,otherp,hlink,owner,group,date,time,name = getInfo(line)
-                path = root+'/'+name
-                insertInfo(ownerp,groupp,otherp,hlink,owner,group,date,time,name,path)
-                
-            
-            else:
-                pass
+
+            # if reg.match(line):
+            #     type,ownerp,groupp,otherp,hlink,owner,group,date,time,name = getInfo(line)
+            #     path = root+'/'+name
+            #     insertInfo(type,ownerp,groupp,otherp,hlink,owner,group,date,time,name,path)
+            #     if type == "d":
+            #         insertBLOB(path)
+            # else:
+            #     pass
 
     
 
 def getInfo(line):
-    re_obj = re.match("^d(?P<ownerp>([rwx-]{3}))(?P<groupp>([rwx-]{3}))(?P<otherp>([rwx-]{3})) (?P<hlink>([0-9]+)) (?P<owner>([A-Za-z0-9]+)) (?P<group>([A-Za-z0-9]+)) (?P<size>([0-9]+)) (?P<date>([0-9]+[-][0-9]+[-][0-9]+)) (?P<time>([0-9]+[:][0-9]+)) (?P<name>([^/]+))", line)
+    re_obj = reg.match(line)
+    type = re_obj.group("type")
     ownerp = re_obj.group("ownerp")
     groupp = re_obj.group("groupp")
     otherp = re_obj.group("otherp")
@@ -57,20 +59,20 @@ def getInfo(line):
     time = re_obj.group("time")
     name = re_obj.group("name")   
     
-    return ownerp,groupp,otherp,hlink,owner,group,date,time,name
+    return type,ownerp,groupp,otherp,hlink,owner,group,date,time,name
     
     
-def insertInfo(ownerp,groupp,otherp,hlink,owner,group,date,time,name,path):
+def insertInfo(type,ownerp,groupp,otherp,hlink,owner,group,date,time,name,path):
     connection = mysql.connector.connect(host='localhost',
                                          database='project',
                                          user='root',
                                          password='ece651db')
     cursor = connection.cursor()
     sql_insert_info_query = """ INSERT INTO FileInfo
-                      (ownerPermission, groupUserPermission, otherUserPermission, numHardLinks,
+                      (type,ownerPermission, groupUserPermission, otherUserPermission, numHardLinks,
                       owner, `group`, `size`, lastModified, lastModifiedTime, name, `path`) 
-                      VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, %s)"""
-    insert_info_tuple = (ownerp,groupp,otherp,hlink,owner,group,date,time,name,path)
+                      VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, %s)"""
+    insert_info_tuple = (type,ownerp,groupp,otherp,hlink,owner,group,date,time,name,path)
     cursor.execute(sql_insert_info_query, insert_info_tuple)
     connection.commit()
     return
@@ -80,6 +82,7 @@ def convertToBinaryData(filename):
     with open(filename, 'rb') as file:
         binaryData = file.read()
     return binaryData
+
 
 def insertBLOB(path):
     connection = mysql.connector.connect(host='localhost',
@@ -106,6 +109,16 @@ def main():
         cursor.close()
         connection.close()
         print("MySQL connection is closed")
-        
+
 if __name__ == '__main__':
     main()
+
+# To do
+# 1. call connection less (one time best)
+# 2. memory cost is large when convert text to blob
+
+# test
+# line = "drwxr-xr-x 2 jiahao jiahao 4096 Jan  18 14:23 Videos"
+# if reg.match(line):
+#     print("find")
+# print(getInfo(line))
