@@ -4,7 +4,7 @@ CREATE TABLE `FileBlobs` (
 )
 
 CREATE TABLE `FileInfo` (
- `type` CHAR[3],
+ `type` CHAR(3),
  `ownerPermission` CHAR(3),
  `groupUserPermission` CHAR(3),
  `otherUserPermission` CHAR(3),
