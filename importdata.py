@@ -6,11 +6,9 @@ import mysql.connector
 from mysql.connector import Error
 
 # reg = re.compile("^[dbclnps-][rwx-]{9} [0-9]+ [A-Za-z0-9]+ [A-Za-z0-9]+ [0-9]+ [A-Za-z]{3} \s?[0-9]+ [0-9]+[:][0-9]+ .+$")
-reg = re.compile("^(?P<type>([dbclnps-]))(?P<ownerp>([rwx-]{3}))(?P<groupp>([rwx-]{3}))(?P<otherp>([rwx-]{3})) (?P<hlink>(\s*[0-9]+)) (?P<owner>([A-Za-z0-9]+)) (?P<group>([A-Za-z0-9]+)) (?P<size>(\s*[0-9]+)) (?P<date>([A-Za-z]{3} \s?[0-9]+)) (?P<time>([0-9]+[:][0-9]+)) (?P<name>(.+))$")
-
+reg = re.compile("^(?P<type>([dbclnps-]))(?P<ownerp>([rwx-]{3}))(?P<groupp>([rwx-]{3}))(?P<otherp>([rwx-]{3}.?)) (?P<hlink>(\s*[0-9]+)) (?P<owner>(\s*[A-Za-z0-9]+)) (?P<group>(\s*[A-Za-z0-9]+)) (?P<size>(\s*[0-9]+)) (?P<date>(\s*[A-Za-z]{3} \s?[0-9]+)) (?P<time>([0-9]+[:][0-9]+)) (?P<name>(.+))$")
 
 # DirTree = dict()
-
 # class Directory:
     # def __init__(self, name='', parent='', dson=[], fson=[], path='')
         # self.parent = parent
@@ -20,31 +18,28 @@ reg = re.compile("^(?P<type>([dbclnps-]))(?P<ownerp>([rwx-]{3}))(?P<groupp>([rwx
         # self.path = path
 
        
+def scanDir(connection, rootDir):
+    for (root,dirs,files) in os.walk(rootDir, topdown=True):
+        # print((root,dirs,files))
+        result = subprocess.run(['ls', '-la', root], stdout=subprocess.PIPE).stdout.decode('utf-8')
+        # print(result)
+        # print(result.split("\n")[1:-1])
+        for line in result.split("\n")[1:-1]:
+            # print(line)
+            type, ownerp, groupp, otherp, hlink, owner, group, size, date, time, name = getInfo(line)
+            insertInfo(connection, root, name, type, ownerp, groupp, otherp, hlink, owner, group, size, date, time)
+            if type != "d":
+                insertBLOB(connection, root, name)
 
-       
-def scanDir():
-    for (root,dirs,files) in os.walk(os.getcwd(), topdown=True): 
-        result = subprocess.run(['ls', '-l'], stdout=subprocess.PIPE).stdout.decode('utf-8')
-        print(result)
-        print(result.split("\n")[1:])
-        for line in result.split("\n")[1:]:
-            print(line)
-            type, ownerp, groupp, otherp, hlink, owner, group, date, time, name = getInfo(line)
-            path = root + '/' + name
-            insertInfo(type, ownerp, groupp, otherp, hlink, owner, group, date, time, name, path)
-            if type == "d":
-                insertBLOB(path)
 
-            # if reg.match(line):
-            #     type,ownerp,groupp,otherp,hlink,owner,group,date,time,name = getInfo(line)
-            #     path = root+'/'+name
-            #     insertInfo(type,ownerp,groupp,otherp,hlink,owner,group,date,time,name,path)
-            #     if type == "d":
-            #         insertBLOB(path)
-            # else:
-            #     pass
+def connectDB():
+    connection = mysql.connector.connect(host='localhost',
+                                         database='ece656project',
+                                         user='root',
+                                         password='ece651db',
+                                         auth_plugin='mysql_native_password')
+    return connection
 
-    
 
 def getInfo(line):
     re_obj = reg.match(line)
@@ -52,73 +47,71 @@ def getInfo(line):
     ownerp = re_obj.group("ownerp")
     groupp = re_obj.group("groupp")
     otherp = re_obj.group("otherp")
-    hlink = re_obj.group("hlink")
+    hlink = int(re_obj.group("hlink"))
     owner = re_obj.group("owner")
     group = re_obj.group("group")
+    size = int(re_obj.group("size"))
     date = re_obj.group("date")
     time = re_obj.group("time")
-    name = re_obj.group("name")   
+    name = re_obj.group("name")
+    return type,ownerp,groupp,otherp,hlink,owner,group,size,date,time,name
     
-    return type,ownerp,groupp,otherp,hlink,owner,group,date,time,name
     
-    
-def insertInfo(type,ownerp,groupp,otherp,hlink,owner,group,date,time,name,path):
-    connection = mysql.connector.connect(host='localhost',
-                                         database='project',
-                                         user='root',
-                                         password='ece651db')
+def insertInfo(connection,parentdir,name,type,ownerp,groupp,otherp,hlink,owner,group,size,date,time):
     cursor = connection.cursor()
+    # print(path)
     sql_insert_info_query = """ INSERT INTO FileInfo
-                      (type,ownerPermission, groupUserPermission, otherUserPermission, numHardLinks,
-                      owner, `group`, `size`, lastModified, lastModifiedTime, name, `path`) 
-                      VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, %s)"""
-    insert_info_tuple = (type,ownerp,groupp,otherp,hlink,owner,group,date,time,name,path)
+                      (`parentdir`, `name`, `type`, ownerPermission, groupUserPermission, otherUserPermission, 
+                      numHardLinks, owner, `group`, `size`, lastModifiedDate, lastModifiedTime) 
+                      VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"""
+    insert_info_tuple = (parentdir,name,type,ownerp,groupp,otherp,hlink,owner,group,size,date,time)
     cursor.execute(sql_insert_info_query, insert_info_tuple)
     connection.commit()
+    cursor.close()
     return
 
-def convertToBinaryData(filename):
+
+def convertToBinaryData(path_to_file):
     # Convert digital data to binary format
-    with open(filename, 'rb') as file:
+    with open(path_to_file, 'rb') as file:
         binaryData = file.read()
     return binaryData
 
 
-def insertBLOB(path):
-    connection = mysql.connector.connect(host='localhost',
-                                         database='project',
-                                         user='root',
-                                         password='ece651db')
-
+def insertBLOB(connection, parentdir, name):
     cursor = connection.cursor()
-    sql_insert_blob_query = """ INSERT INTO FileBlobs
-                          (path, file) VALUES (%s,%s)"""
-
-    buffer = convertToBinaryData(path)
+    sql_insert_blob_query = """ INSERT INTO FileBlobs (`parentdir`, `name`, `fileContent`) VALUES (%s, %s, %s)"""
+    path_to_file = parentdir + '/' + name
+    buffer = convertToBinaryData(path_to_file)
 
     # Convert data into tuple format
-    insert_blob_tuple = (path, buffer)
+    insert_blob_tuple = (parentdir, name, buffer)
     result = cursor.execute(sql_insert_blob_query, insert_blob_tuple)
     connection.commit()
+    cursor.close()
     return
 
 
+# def creatDatabase(connection):
+#     cursor = connection.cursor()
+#     query = open("./createTable.sql").read()
+#     try:
+#         cursor.execute(query, multi=True)
+#         connection.commit()
+#         cursor.close()
+#     except mysql.connector.Error as err:
+#         print(err)
+
+
 def main():
-    scanDir()
+    connection = connectDB()
+    # creatDatabase(connection)
+    scanDir(connection, "/Users/jiahao/Desktop")
     if (connection.is_connected()):
-        cursor.close()
         connection.close()
-        print("MySQL connection is closed")
+        # print("MySQL connection is closed")
+
 
 if __name__ == '__main__':
     main()
 
-# To do
-# 1. call connection less (one time best)
-# 2. memory cost is large when convert text to blob
-
-# test
-# line = "drwxr-xr-x 2 jiahao jiahao 4096 Jan  18 14:23 Videos"
-# if reg.match(line):
-#     print("find")
-# print(getInfo(line))
