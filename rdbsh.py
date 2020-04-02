@@ -1,6 +1,7 @@
 import mysql.connector
 import sys
 import re
+from importdata import connectDB
 from mysql.connector import Error
 
 
@@ -10,84 +11,94 @@ def write_file(data, filename):
         file.write(data)
 
 
+# check whether the path current_dir/path_to_dir exists
+def is_dir_exist(connection, current_dir, path_to_dir):
+    cursor = connection.cursor()
+    query = """select count(name) as num from FileInfo where parentdir = %s and name = %s"""
+
+    if path_to_dir.find('/') == -1:
+        cursor.execute(query, (current_dir, path_to_dir))
+    else:
+        bottom_dir = path_to_dir.split('/')[-1]
+        parent_dir = current_dir
+        for dir in path_to_dir.split('/')[:-1]:
+            parent_dir = parent_dir + '/' + dir
+        cursor.execute(query, (parent_dir, bottom_dir))
+
+    for num in cursor:
+        if int(num[0]) > 0:
+            return True
+
+    return False
+
+
+def cd(connection, current_dir, input):
+    re_obj = re.match("^cd (?P<path_to_dir>(.+))", input)
+    path_to_dir = re_obj.group("path_to_dir").rstrip('/') # remove '/' at the end of the path if there is any
+    if path_to_dir == ".":
+        return current_dir
+    if path_to_dir == "..":
+        if current_dir.split('/')[1] != '':
+            for dir in current_dir.split('/')[1:-1]:
+                current_dir = '/' + dir
+        else:
+            current_dir = '/'
+    else:
+        if is_dir_exist(connection, current_dir, path_to_dir):
+            current_dir = current_dir + '/' + path_to_dir
+        else:
+            print("cd: no such directory: {}").format(path_to_dir)
+    return current_dir
+
+def ls():
+
+
+
 def shell():
-    #pwd, cd, path, ls, ls -l, find, grep
-    pwd = "topdirectory"
+    #root_dir, cd, path, ls, ls -l, find, grep
+    root_dir = "/Users/jiahao/Desktop"
+    current_dir = root_dir
     #present working directory
-    symbol = " $(:D)$ "
+    symbol = " $ "
+
     re_cd = re.compile("^cd ")
     re_find = re.compile("^find ")
     re_grep = re.compile("^grep ")
 
-    
-    connection = mysql.connector.connect(host='localhost',
-                                         database='project',
-                                         user='root',
-                                         password='ece651db')
-    
+    connection = connectDB()
     cursor = connection.cursor()
     
     while True:
-        fakeshell = pwd+symbol
+        fakeshell = current_dir + symbol
         sys.stdout.write(fakeshell)
         try:
             line = sys.stdin.readline()
         except EOFError:
             break
-    
-        if line == 'pwd':
-            print(pwd)
-            
-        elif line == '.' or line == './':
-            print(pwd.rsplit('/',1)[1])
-            
-        elif line == '..' or line == '../':
-            print(pwd.rsplit('/',2)[1])
-            
-        elif re_open_dir.match(line):    
-            s
-        elif re_cd.match(line):
-            re_obj = re.match("cd (?P<path>(.+))" ,line)
-            path = re_obj.group('path').rstrip('/')
-            
-            if path.find('/') == -1:
-                newpath = (pwd+'/'+path)
 
-            elif path == '.':
-                continue
-            elif path == '..':
-                pwd = pwd.rsplit('/',1)[0]
-                continue
-            else:
-                newpath = path.rstrip('/')
-            
-            sql_fetch_path_query = """SELECT `path` FROM FileInfo WHERE `path` = %s AND `type` = 'd'"""
-            cursor.execute(sql_fetch_path_query, (newpath,))
-            record = cursor.fetchall()
-            
-            if record:
-                pwd = newpath
+        if re_cd.match(line):
+            current_dir = cd(connection, current_dir, line)
                 
         elif line == 'ls':
             sql_fetch_son_query = """SELECT `name` FROM FileInfo WHERE `path` LIKE %s"""
-            cursor.execute(sql_fetch_son_query, (pwd+"/%",))
+            cursor.execute(sql_fetch_son_query, (root_dir+"/%",))
             record = cursor.fetchall()
-            #find all records whose path starts with pwd
+            #find all records whose path starts with root_dir
             for row in record:
-                obj_in_pwd = "^"+pwd+"/[^/]$"
+                obj_in_root_dir = "^"+root_dir+"/[^/]$"
                 #match objects in the current directory, exclude all subdirectories
-                if re.match(obj_in_pwd, row):                    
+                if re.match(obj_in_root_dir, row):                    
                     print(row[0])
                         
         elif line == 'ls -l':
             sql_fetch_son_query = """SELECT * FROM FileInfo WHERE `path` LIKE %s"""
-            cursor.execute(sql_fetch_son_query, (pwd+"/%",))
+            cursor.execute(sql_fetch_son_query, (root_dir+"/%",))
             record = cursor.fetchall()
             
             for row in record:
-                obj_in_pwd = "^"+pwd+"/[^/]$"
+                obj_in_root_dir = "^"+root_dir+"/[^/]$"
 
-                if re.match(obj_in_pwd, row):
+                if re.match(obj_in_root_dir, row):
                     print(row[0],row[1],row[2],row[3]," ",row[4]," ",row[5]," ",row[6]," ",row[7]," ",row[8]," ",row[9]," ",row[10]," ",row[11])
            
         elif re_find.match(line):
@@ -98,10 +109,10 @@ def shell():
             record = cursor.fetchall()
             
             for row in record:
-                sub_pwd = "^"+pwd
-                #all files and folders under pwd
-                if re.match(sub_pwd, row):
-                    print(row[0],row[1],row[2],row[3]," ",row[4]," ",row[5]," ",row[6]," ",row[7]," ",row[8]," ",row[9]," ",row[10]," ",(row[12][(len(pwd)+1):]))
+                sub_root_dir = "^"+root_dir
+                #all files and folders under root_dir
+                if re.match(sub_root_dir, row):
+                    print(row[0],row[1],row[2],row[3]," ",row[4]," ",row[5]," ",row[6]," ",row[7]," ",row[8]," ",row[9]," ",row[10]," ",(row[12][(len(root_dir)+1):]))
            
         elif re_grep.match(line):
             re_obj = re.match("grep (?P<phrase>([^ ]+) (?P<filepath>(.+)))", line)
@@ -110,12 +121,12 @@ def shell():
             #support the format ./file
             
             if path.find('/') == -1:
-                newpath = (pwd+'/'+path)
+                newpath = (root_dir+'/'+path)
 
             elif path == '.':
                 continue
             elif path == '..':
-                pwd = pwd.rsplit('/',1)[0]
+                root_dir = root_dir.rsplit('/',1)[0]
                 continue
             else:
                 newpath = path.rstrip('/')
