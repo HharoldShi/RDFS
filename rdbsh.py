@@ -37,6 +37,10 @@ def move_dir_up_one_level(path_to_dir):
     return temp_dir
 
 
+def pwd(current_dir):
+    print(current_dir)
+
+
 def cd(connection, current_dir, input):
     re_obj = re.match("^cd (?P<path_to_dir>(.+))", input)
     path_to_dir = re_obj.group("path_to_dir").rstrip('/') # remove '/' at the end of the path if there is any
@@ -170,8 +174,12 @@ def shell():
         except EOFError:
             break
 
+        #pwd
+        if re.match("^\s*pwd\s*", line):
+            pwd(current_dir)
+
         # cd
-        if re.match("^\s*cd", line):
+        elif re.match("^\s*cd", line):
             current_dir = cd(connection, current_dir, line)
 
         # ls
@@ -215,6 +223,7 @@ if __name__ == '__main__':
 # ls -l
 # find . test*
 # grep "thi" test.txt
+# grep "thissa" test.txt
 
 
 # To do
