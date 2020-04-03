@@ -26,4 +26,8 @@ CREATE TABLE `FileInfo` (
  PRIMARY KEY(`parentdir`,`name`)
 )ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
-
+drop table if exists `PATH`;
+create table `PATH`(
+ `path` VARCHAR(256) NOT NULL,
+ PRIMARY KEY(`path`)
+)ENGINE=InnoDB DEFAULT CHARSET=utf8;

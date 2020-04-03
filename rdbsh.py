@@ -1,7 +1,8 @@
 import mysql.connector
+import subprocess
 import sys
 import re
-from importdata import connectDB
+from importdata import connectDB, scanDir
 from mysql.connector import Error
 
 
@@ -158,6 +159,46 @@ def grep(connection, pattern, partial_filename, current_dir):
         print("grep: no match is found. ")
         return
 
+
+def add_to_PATH(connection, path):
+    cursor = connection.cursor()
+    query = """ insert into `PATH` (`path`) values ({})""".format(path)
+    cursor.execute(query)
+    connection.commit()
+    cursor.close()
+
+
+def execute_prog_in_PATH(connection, prog_name):
+    cursor = connection.cursor()
+    query = """ select `path` from `PATH` """
+    cursor.execute(query)
+    executed = False
+    for path in cursor:
+        try:
+            path_to_prog = path[0] + "/" + prog_name
+            ret_code = subprocess.call([path_to_prog])
+            if ret_code == 0:
+                executed = True
+                cursor.close()
+                return 0
+        except:
+            pass
+        #     print(ret_code)
+    if not executed:
+        print("Error: Unknown command.")
+    cursor.close()
+    return -1
+
+
+def show_PATH(connection):
+    cursor = connection.cursor()
+    query = """ select `path` from `PATH` """
+    cursor.execute(query)
+    for path in cursor:
+        print(path[0])
+    cursor.close()
+
+
 def shell():
     #root_dir, cd, path, ls, ls -l, find, grep
     root_dir = '/Users/jiahao/Desktop'
@@ -174,8 +215,12 @@ def shell():
         except EOFError:
             break
 
+        if re.match("^\s*importdata\s*", line):
+            scanDir(connection, root_dir)
+            print("importdata success!")
+
         #pwd
-        if re.match("^\s*pwd\s*", line):
+        elif re.match("^\s*pwd\s*", line):
             pwd(current_dir)
 
         # cd
@@ -203,6 +248,22 @@ def shell():
             pattern = re_obj.group("pattern").replace('"','')
             partial_filename = re_obj.group("partial_filename")
             grep(connection, pattern, partial_filename, current_dir)
+
+        # export PATH "path_to_excutable_programs"
+        elif re.match("^\s*export \s*PATH \s*(?P<path>(.+))", line):
+            re_obj = re.match("\s*export \s*PATH \s*(?P<path>(.+))", line)
+            path_to_prog = re_obj.group("path")
+            add_to_PATH(connection, path_to_prog)
+
+        # show PATH
+        elif re.match("\s*show \s*PATH\s*", line):
+            show_PATH(connection)
+
+        elif re.match("^\s*(?P<prog_name>(.+))",line):
+            # print("check")
+            re_obj = re.match("^\s*(?P<prog_name>(.+))", line)
+            prog_name = re_obj.group("prog_name")
+            ret_code = execute_prog_in_PATH(connection, prog_name)
 
         else:
             print("Error: Unknown command.")
