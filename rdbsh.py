@@ -77,16 +77,19 @@ def lsl(connection, current_dir):
 
 
 def find(connection, path_to_dir, partial_filename, current_dir):
+    find_dir = path_to_dir
     if path_to_dir == ".":
         find_dir = current_dir
-    if path_to_dir == "..":
+    elif path_to_dir == "..":
         find_dir = move_dir_up_one_level(current_dir)
-    if path_to_dir.find('/') != 0:
-        find_dir = current_dir + '/' + path_to_dir
+    else:
+        # the path is under the current dir
+        if path_to_dir.find('/') != 0:
+            find_dir = current_dir + '/' + path_to_dir
 
-    if not is_dir_exist(find_dir):
-        print("find: directory not exist {}".format(find_dir))
-        return
+    # if not is_dir_exist(connection, current_dir, find_dir):
+    #     print("find: directory not exist: {}".format(find_dir))
+    #     return
 
     dir_pattern = find_dir + "%"
     filename_pattern = partial_filename.replace("*", "%")
@@ -94,17 +97,18 @@ def find(connection, path_to_dir, partial_filename, current_dir):
     cursor = connection.cursor()
     query = """select `type`, `ownerPermission`, `groupUserPermission`, `otherUserPermission`, 
             `numHardLinks`, `owner`, `group`, `size`, `lastModifiedDate`, `lastModifiedtime`, 
-            `parentdir`, `name` from FileInfo where parentdir like "{}" and name like "{}" """.format(dir_pattern, filename_pattern)
+            `parentdir`, `name` from FileInfo where parentdir like "{}" and `name` like "{}" """.format(dir_pattern, filename_pattern)
     cursor.execute(query)
 
-    if len(cursor.fetchall()) == 0:
-        print("find: file not found. ")
-
+    flag = 0
     for (type, ownerPermission, groupUserPermission, otherUserPermission, numHardLinks, owner, group, size,
          lastModifiedDate, lastModifiedtime, parentdir, name) in cursor:
+        flag = 1
         print("{}{}{}{:4} {:>5}  {}  {} {:>8}  {:>3}  {:>2}  {}/{}".format(type, ownerPermission, groupUserPermission,
                                                                         otherUserPermission, numHardLinks, owner, group,
                                                                         size, lastModifiedDate, lastModifiedtime, parentdir, name))
+    if flag == 0:
+        print("find: file not found. ")
     cursor.close()
 
 
@@ -131,18 +135,24 @@ def grep(connection, pattern, partial_filename, current_dir):
             `name` like "{}" """.format(grep_dir, filename_pattern)
     cursor.execute(query)
 
-    if len(cursor.fetchall()) == 0:
-        print("grep: file not exist. ")
-        return
-
+    flag = 0
+    found = False
     for (path, fileContent) in cursor:
+        flag = 1
         lines = str(fileContent.decode(encoding='UTF-8')).splitlines()
         line_num = 0
         for line in lines:
             line_num += 1
             if pattern_re.search(line) is not None:
+                found = True
                 print(path, ":", line_num, " ", line)
 
+    if flag == 0:
+        print("grep: file not exist. ")
+        return
+    if not found:
+        print("grep: no match is found. ")
+        return
 
 def shell():
     #root_dir, cd, path, ls, ls -l, find, grep
@@ -199,6 +209,7 @@ if __name__ == '__main__':
     shell()
 
 # tests
+
 # cd test/test1
 # ls
 # ls -l
