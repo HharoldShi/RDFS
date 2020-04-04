@@ -6,7 +6,10 @@ import mysql.connector
 from mysql.connector import Error
 
 # reg = re.compile("^[dbclnps-][rwx-]{9} [0-9]+ [A-Za-z0-9]+ [A-Za-z0-9]+ [0-9]+ [A-Za-z]{3} \s?[0-9]+ [0-9]+[:][0-9]+ .+$")
-reg = re.compile("^(?P<type>([dbclnps-]))(?P<ownerp>([rwx-]{3}))(?P<groupp>([rwx-]{3}))(?P<otherp>([rwx-]{3}.?)) (?P<hlink>(\s*[0-9]+)) (?P<owner>(\s*[A-Za-z0-9]+)) (?P<group>(\s*[A-Za-z0-9]+)) (?P<size>(\s*[0-9]+)) (?P<date>(\s*[A-Za-z]{3} \s?[0-9]+)) (?P<time>([0-9]+[:][0-9]+)) (?P<name>(.+))$")
+# reg = re.compile("^(?P<type>([dbclnps-]))(?P<ownerp>([rwx-]{3}))(?P<groupp>([rwx-]{3}))(?P<otherp>([rwx-]{3}.?)) (?P<hlink>(\s*[0-9]+)) (?P<owner>(\s*[A-Za-z0-9]+)) (?P<group>(\s*[A-Za-z0-9]+)) (?P<size>(\s*[0-9]+)) (?P<date>(\s*[A-Za-z]{3} \s?[0-9]+)) (?P<time>([0-9]+[:][0-9]+)) (?P<name>(.+))")
+reg_ide = re.compile("^(?P<type>(.))(?P<ownerp>(.{3}))(?P<groupp>(.{3}))(?P<otherp>(.{3}.?)) (?P<hlink>(\s*[0-9]+)) (?P<owner>(\s*[A-Za-z0-9_]+)) (?P<group>(\s*[A-Za-z0-9_]+)) (?P<size>(\s*[0-9]+)) (?P<date>(\s*[A-Za-z]{3} \s?[0-9]+)) (?P<time>([0-9]+[:][0-9]+)) (?P<name>(.+))")
+reg_macos = re.compile("^(?P<type>(.))(?P<ownerp>(.{3}))(?P<groupp>(.{3}))(?P<otherp>(.{3}.?)) (?P<hlink>(\s*[0-9]+)) (?P<owner>(\s*[A-Za-z0-9_]+)) (?P<group>(\s*[A-Za-z0-9_]+)) (?P<size>(\s*[0-9]+)) (?P<date>(\s*[0-9]+ [A-Za-z]{3})) (?P<time>([0-9]+[:][0-9]+)) (?P<name>(.+))")
+
 
 # DirTree = dict()
 # class Directory:
@@ -22,13 +25,12 @@ def scanDir(connection, rootDir):
     for (root,dirs,files) in os.walk(rootDir, topdown=True):
         # print((root,dirs,files))
         result = subprocess.run(['ls', '-la', root], stdout=subprocess.PIPE).stdout.decode('utf-8')
-        # print(result)
         # print(result.split("\n")[1:-1])
         for line in result.split("\n")[1:-1]:
             # print(line)
             type, ownerp, groupp, otherp, hlink, owner, group, size, date, time, name = getInfo(line)
             insertInfo(connection, root, name, type, ownerp, groupp, otherp, hlink, owner, group, size, date, time)
-            if type != "d":
+            if type == "-":
                 insertBLOB(connection, root, name)
 
 
@@ -42,7 +44,12 @@ def connectDB():
 
 
 def getInfo(line):
-    re_obj = reg.match(line)
+    if reg_ide.match(line):
+        re_obj = reg_ide.match(line)
+    elif reg_macos.match(line):
+        re_obj = reg_macos.match(line)
+    else:
+        print("Error arise when parse data. ")
     type = re_obj.group("type")
     ownerp = re_obj.group("ownerp")
     groupp = re_obj.group("groupp")
@@ -54,6 +61,10 @@ def getInfo(line):
     date = re_obj.group("date")
     time = re_obj.group("time")
     name = re_obj.group("name")
+    if name.find(' -> ') != -1:
+        tmp_name = name
+        name = tmp_name.split(' -> ')[0]
+        sym_link = tmp_name.split(' -> ')[1]
     return type,ownerp,groupp,otherp,hlink,owner,group,size,date,time,name
     
     

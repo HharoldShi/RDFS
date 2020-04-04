@@ -5,6 +5,7 @@ import re
 from importdata import connectDB, scanDir
 from mysql.connector import Error
 
+root_dir = '/Library/Python/3.7'
 
 # check whether the path current_dir/path_to_dir exists
 def is_dir_exist(connection, current_dir, path_to_dir):
@@ -13,6 +14,13 @@ def is_dir_exist(connection, current_dir, path_to_dir):
 
     if path_to_dir.find('/') == -1:
         cursor.execute(query, (current_dir, path_to_dir))
+    elif path_to_dir.find('/') == 0:
+        if path_to_dir == root_dir:
+            return True
+        else:
+            p_dir = move_dir_up_one_level(path_to_dir)
+            c_dir = path_to_dir.split('/')[-1]
+            cursor.execute(query, (p_dir, c_dir))
     else:
         bottom_dir = path_to_dir.split('/')[-1]
         parent_dir = current_dir
@@ -51,11 +59,14 @@ def cd(connection, current_dir, input):
         current_dir = move_dir_up_one_level(current_dir)
     else:
         if is_dir_exist(connection, current_dir, path_to_dir):
-            current_dir = current_dir + '/' + path_to_dir
+            if path_to_dir.find('/') == 0:
+                current_dir = path_to_dir
+            else:
+                current_dir = current_dir + '/' + path_to_dir
         else:
             # print(path_to_dir)
             print("cd: no such directory: {}".format(path_to_dir))
-            return
+            return current_dir
     return current_dir
 
 
@@ -201,7 +212,6 @@ def show_PATH(connection):
 
 def shell():
     #root_dir, cd, path, ls, ls -l, find, grep
-    root_dir = '/Users/jiahao/Desktop'
     current_dir = root_dir
     connection = connectDB()
 
@@ -217,7 +227,7 @@ def shell():
 
         if re.match("^\s*importdata\s*", line):
             scanDir(connection, root_dir)
-            print("importdata success!")
+            print("Succeed to import data from directory: {}".format(root_dir))
 
         #pwd
         elif re.match("^\s*pwd\s*", line):
@@ -277,16 +287,37 @@ def shell():
 if __name__ == '__main__':
     shell()
 
+
 # tests
 
-# cd test/test1
+# show databases
+# source and show tables
+
+# importdata
+# pwd
 # ls
 # ls -l
+# cd site-packages
+# ls -l
+# cd django
+# ls -l
+
+# find . test
 # find . test*
-# grep "thi" test.txt
-# grep "thissa" test.txt
+# find /Library/Python/3.7/site-packages/django/core/management/commands/__pycache__ test*
+# find /Library/Python/3.7/site-packages/django/core/management/commands/__pycache__ nothisfile*
+# find /Library/Python/3.7/nofolder test*
 
 
-# To do
-# - find dir test; append the dir to the current directory (except dir starts with '/')
-# - grep pattern file; if file contains path in it, append the path to curent dir (except when the path starts with '/')
+# grep "test" contrib/admin/tests.py
+# grep "there is no pattern" contrib/admin/tests.py
+# cd contrib/admin
+# grep "test" tes*
+
+# cd /Library/Python/3.7/test/test_cpp_project
+# ls -l
+# show PATH
+# export PATH "/Library/Python/3.7/test/test_cpp_project"
+# export PATH "/Usr/bin"
+# python3
+
