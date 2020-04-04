@@ -179,6 +179,14 @@ def add_to_PATH(connection, path):
     cursor.close()
 
 
+def remove_PATH(connection, path):
+    cursor = connection.cursor()
+    query = """ delete from `PATH` where `path` = {}""".format(path)
+    cursor.execute(query)
+    connection.commit()
+    cursor.close()
+
+
 def execute_prog_in_PATH(connection, prog_name):
     cursor = connection.cursor()
     query = """ select `path` from `PATH` """
@@ -264,6 +272,12 @@ def shell():
             re_obj = re.match("\s*export \s*PATH \s*(?P<path>(.+))", line)
             path_to_prog = re_obj.group("path")
             add_to_PATH(connection, path_to_prog)
+
+        # remove PATH "path_to_excutable_programs"
+        elif re.match("^\s*remove \s*PATH \s*(?P<path>(.+))", line):
+            re_obj = re.match("\s*remove \s*PATH \s*(?P<path>(.+))", line)
+            path_to_prog = re_obj.group("path")
+            remove_PATH(connection, path_to_prog)
 
         # show PATH
         elif re.match("\s*show \s*PATH\s*", line):
