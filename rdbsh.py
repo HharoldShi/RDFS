@@ -283,6 +283,7 @@ def shell():
         elif re.match("\s*show \s*PATH\s*", line):
             show_PATH(connection)
 
+        # run excutable that is in the PATH
         elif re.match("^\s*(?P<prog_name>(.+))",line):
             # print("check")
             re_obj = re.match("^\s*(?P<prog_name>(.+))", line)

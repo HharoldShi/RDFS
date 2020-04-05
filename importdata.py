@@ -117,7 +117,7 @@ def insertBLOB(connection, parentdir, name):
 def main():
     connection = connectDB()
     # creatDatabase(connection)
-    scanDir(connection, "/Users/jiahao/Desktop")
+    scanDir(connection, "/Library/Python/3.7")
     if (connection.is_connected()):
         connection.close()
         # print("MySQL connection is closed")
